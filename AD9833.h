@@ -27,6 +27,7 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <math.h>       /* fmod */
 
 //#define FNC_PIN 4			// Define FNC_PIN for fast digital writes
 
@@ -35,7 +36,7 @@
 	#include "digitalWriteFast.h"
 	#define WRITE_FNCPIN(Val) digitalWriteFast2(FNC_PIN,(Val))
 #else  // otherwise, just use digitalWrite
-	#define WRITE_FNCPIN(Val) digitalWrite(FNCpin,(Val))
+	#define WRITE_FNCPIN(Val) digitalWrite(csPin,(Val))
 #endif
 
 #define pow2_28				268435456L	// 2^28 used in frequency word calculation
@@ -66,16 +67,16 @@ class AD9833 {
 
 public:
 	
-	AD9833 ( uint8_t FNCpin, uint32_t referenceFrequency = 25000000UL );
+	AD9833 ( uint8_t csPin, uint8_t clockPin, uint8_t dataPin, uint32_t referenceFrequency = 25000000UL );
 
 	// Must be the first command after creating the AD9833 object.
 	void Begin ( void );
 
 	// Setup and apply a signal. Note that any calls to EnableOut,
 	// SleepMode, DisableDAC, or DisableInternalClock remain in effect
-	void ApplySignal ( WaveformType waveType, Registers freqReg,
-		float frequencyInHz,
-		Registers phaseReg = SAME_AS_REG0, float phaseInDeg = 0.0 );
+	void ApplySignal ( WaveformType waveType,
+					   Registers freqReg, float frequencyInHz,
+					   Registers phaseReg = SAME_AS_REG0, float phaseInDeg = 0.0 );
 
 	// Resets internal registers to 0, which corresponds to an output of
 	// midscale - digital output at 0. See EnableOutput function
@@ -121,13 +122,17 @@ public:
 	// Return frequency resolution 
 	float GetResolution ( void );
 
+	void sendBit(uint8_t bit, uint8_t data);
+
 private:
 
 	void 			WriteRegister ( int16_t dat );
 	void 			WriteControlRegister ( void );
 	uint16_t		waveForm0, waveForm1;
 #ifndef FNC_PIN
-	uint8_t			FNCpin;
+	uint8_t			csPin;
+	uint8_t 		clockPin;
+	uint8_t  		dataPin;
 #endif
 	uint8_t			outputEnabled, DacDisabled, IntClkDisabled;
 	uint32_t		refFrequency;

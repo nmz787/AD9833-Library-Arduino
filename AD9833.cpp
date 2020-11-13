@@ -25,16 +25,21 @@
 
 #include "AD9833.h"
 
+
 /*
  * Create an AD9833 object
  */
-AD9833 :: AD9833 ( uint8_t FNCpin, uint32_t referenceFrequency ) {
+AD9833 :: AD9833 ( uint8_t csPin, uint8_t clockPin, uint8_t dataPin, uint32_t referenceFrequency ) {
 	// Pin used to enable SPI communication (active LOW)
 #ifdef FNC_PIN
 	pinMode(FNC_PIN,OUTPUT);
 #else
-	this->FNCpin = FNCpin;
-	pinMode(FNCpin,OUTPUT);
+	this->csPin = csPin;
+	this->clockPin = clockPin;
+	this->dataPin = dataPin;
+	pinMode(csPin, OUTPUT);
+	pinMode(clockPin, OUTPUT);
+	pinMode(dataPin, OUTPUT);
 #endif
 	WRITE_FNCPIN(HIGH);
 
@@ -61,9 +66,26 @@ AD9833 :: AD9833 ( uint8_t FNCpin, uint32_t referenceFrequency ) {
  * Start SPI and place the AD9833 in the RESET state
  */
 void AD9833 :: Begin ( void ) {
-	SPI.begin();
-	delay(100);
+	delay(15);
 	Reset();	// Hold in RESET until first WriteRegister command
+}
+
+
+inline __attribute__((always_inline))
+void AD9833::sendBit(uint8_t bit, uint8_t data) {
+    //if (MODE_CPHA(Mode)) {
+    //  fastDigitalWrite(clockPin, !MODE_CPOL(Mode));
+    //}
+    digitalWrite(clockPin, 1);
+    digitalWrite(dataPin, data & (1 << bit));
+    // fastDigitalWrite(clockPin,
+    //   MODE_CPHA(Mode) ? MODE_CPOL(Mode) : !MODE_CPOL(Mode));
+    digitalWrite(clockPin, 0);
+    // nop;
+    // nop;
+    // if (!MODE_CPHA(Mode)) {
+    //   fastDigitalWrite(SckPin, MODE_CPOL(Mode));
+    // }
 }
 
 /*
@@ -127,7 +149,7 @@ D0	Reserved. Must be 0.
  */
 void AD9833 :: Reset ( void ) {
 	WriteRegister(RESET_CMD);
-	delay(15);
+	//delay(15);
 }
 
 /*
@@ -180,8 +202,9 @@ void AD9833 :: IncrementFrequency ( Registers freqReg, float freqIncHz ) {
  */
 void AD9833 :: SetPhase ( Registers phaseReg, float phaseInDeg ) {
 	// Sanity checks on input
-	phaseInDeg = fmod(phaseInDeg,360);
-	if ( phaseInDeg < 0 ) phaseInDeg += 360;
+	// fmod crashes the teensy, fmodf does not
+	phaseInDeg = fmodf(phaseInDeg, 360.);
+	if ( phaseInDeg < 0 ) phaseInDeg += 360.;
 	
 	// Phase is in float degrees ( 0.0 - 360.0 )
 	// Convert to a number 0 to 4096 where 4096 = 0 by masking
@@ -344,7 +367,7 @@ void AD9833 :: WriteRegister ( int16_t dat ) {
 	/*
 	 * We set the mode here, because other hardware may be doing SPI also
 	 */
-	SPI.setDataMode(SPI_MODE2);
+	//SPI.setDataMode(SPI_MODE2);
 
 	/* Improve overall switching speed
 	 * Note, the times are for this function call, not the write.
@@ -356,8 +379,14 @@ void AD9833 :: WriteRegister ( int16_t dat ) {
 	//delayMicroseconds(2);	// Some delay may be needed
 
 	// TODO: Are we running at the highest clock rate?
-	SPI.transfer(highByte(dat));	// Transmit 16 bits 8 bits at a time
-	SPI.transfer(lowByte(dat));
+	// SPI.transfer(highByte(dat));	// Transmit 16 bits 8 bits at a time
+	// SPI.transfer(lowByte(dat));
+	for (int i=0; i<8;i++){
+		sendBit(i, highByte(dat));
+	}
+	for (int i=0; i<8;i++){
+		sendBit(i, lowByte(dat));
+	}
 
 	WRITE_FNCPIN(HIGH);		// Write done
 }
